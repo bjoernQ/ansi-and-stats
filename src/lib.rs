@@ -220,6 +220,9 @@ fn init_hud() {
 }
 
 fn update_hud(stats: &Stats) {
+    // hide cursor
+    print!("\x1b[?25l");
+
     // save cursor pos
     print!("\x1b[s");
 
@@ -246,13 +249,20 @@ fn update_hud(stats: &Stats) {
 
     // used heap in line 2
     print!("\x1b[2;1H");
-    print!("Used heap {:3}.{:01}k", stats.used_heap / 10, stats.used_heap % 10);
+    print!(
+        "Used heap {:3}.{:01}k",
+        stats.used_heap / 10,
+        stats.used_heap % 10
+    );
 
     // reset style
     print!("\x1b[0m");
 
     // restore cursor pos
     print!("\x1b[u");
+
+    // show cursor
+    print!("\x1b[?25h");
 }
 
 struct Stats {
@@ -301,7 +311,7 @@ fn measure(cs: CriticalSection) -> Stats {
 
     // heap usage
     let used_heap = esp_alloc::HEAP.used() * 10 / 1024;
-    
+
     // is there a way to measure stack usage reliably? especially when esp-wifi's scheduler is running?
 
     Stats {
