@@ -4,19 +4,15 @@
 extern crate alloc;
 
 use embassy_executor::Spawner;
-use embassy_net::{tcp::TcpSocket, Ipv4Address, Stack, StackResources};
+use embassy_net::{tcp::TcpSocket, Ipv4Address, StackResources};
 use embassy_time::{Duration, Timer};
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
+    clock::CpuClock,
     delay::Delay,
-    prelude::*,
     rng::Rng,
-    timer::{
-        systimer::{Periodic, SystemTimer},
-        timg::TimerGroup,
-        AnyTimer, PeriodicTimer,
-    },
+    timer::{systimer::SystemTimer, timg::TimerGroup, AnyTimer, PeriodicTimer},
 };
 use esp_println::println;
 use esp_wifi::{
@@ -45,15 +41,11 @@ const PASSWORD: &str = env!("PASSWORD");
 async fn main(spawner: Spawner) -> ! {
     esp_println::logger::init_logger_from_env();
 
-    let peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
+    let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
 
     esp_alloc::heap_allocator!(72 * 1024);
 
-    let syst = SystemTimer::new(peripherals.SYSTIMER).split::<Periodic>();
+    let syst = SystemTimer::new(peripherals.SYSTIMER);
     let alarm = syst.alarm0;
     let alarm: AnyTimer = alarm.into();
     ansi_and_stats::init(PeriodicTimer::new(alarm));
@@ -83,18 +75,15 @@ async fn main(spawner: Spawner) -> ! {
     let seed = 1234; // very random, very secure seed
 
     // Init network stack
-    let stack = &*mk_static!(
-        Stack<WifiDevice<'_, WifiStaDevice>>,
-        Stack::new(
-            wifi_interface,
-            config,
-            mk_static!(StackResources<3>, StackResources::<3>::new()),
-            seed
-        )
+    let (stack, runner) = embassy_net::new(
+        wifi_interface,
+        config,
+        mk_static!(StackResources<3>, StackResources::<3>::new()),
+        seed,
     );
 
     spawner.spawn(connection(controller)).ok();
-    spawner.spawn(net_task(&stack)).ok();
+    spawner.spawn(net_task(runner)).ok();
 
     let mut rx_buffer = [0; 4096];
     let mut tx_buffer = [0; 4096];
@@ -118,7 +107,7 @@ async fn main(spawner: Spawner) -> ! {
     loop {
         Timer::after(Duration::from_millis(1_000)).await;
 
-        let mut socket = TcpSocket::new(&stack, &mut rx_buffer, &mut tx_buffer);
+        let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
 
         socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
 
@@ -194,8 +183,8 @@ async fn connection(mut controller: WifiController<'static>) {
 }
 
 #[embassy_executor::task]
-async fn net_task(stack: &'static Stack<WifiDevice<'static, WifiStaDevice>>) {
-    stack.run().await
+async fn net_task(mut runner: embassy_net::Runner<'static, WifiDevice<'static, WifiStaDevice>>) {
+    runner.run().await
 }
 
 #[embassy_executor::task]

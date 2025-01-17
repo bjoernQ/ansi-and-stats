@@ -2,19 +2,16 @@
 
 use core::cell::RefCell;
 use critical_section::{CriticalSection, Mutex};
-use esp_hal::{
-    macros::handler,
-    timer::{AnyTimer, PeriodicTimer},
-};
+use esp_hal::{handler, timer::PeriodicTimer, Blocking};
 use esp_println::{print, println};
 use rtos_trace::RtosTrace;
 
-static ALARM0: Mutex<RefCell<Option<PeriodicTimer<'static, AnyTimer>>>> =
+static ALARM0: Mutex<RefCell<Option<PeriodicTimer<'static, Blocking>>>> =
     Mutex::new(RefCell::new(None));
 
 static CYCLES_100PERCENT: Mutex<RefCell<u32>> = Mutex::new(RefCell::new(0));
 
-pub fn init(mut alarm: PeriodicTimer<'static, AnyTimer>) {
+pub fn init(mut alarm: PeriodicTimer<'static, Blocking>) {
     critical_section::with(|cs| {
         alarm.set_interrupt_handler(handler);
         alarm.enable_interrupt(true);
@@ -129,9 +126,9 @@ impl TaskStats {
 
 static TASK_STATS: Mutex<RefCell<TaskStats>> = Mutex::new(RefCell::new(TaskStats::new()));
 
-struct Foo;
+struct RtosTraceImpl;
 
-impl RtosTrace for Foo {
+impl RtosTrace for RtosTraceImpl {
     fn task_new(_id: u32) {
         // do nothing
     }
@@ -193,7 +190,7 @@ impl RtosTrace for Foo {
     }
 }
 
-rtos_trace::global_trace! {Foo}
+rtos_trace::global_trace! {RtosTraceImpl}
 
 fn init_hud() {
     // clear screen

@@ -1,3 +1,4 @@
 - consider a feature for esp-alloc usage
-- make it into a library + example
+- make it into a library + example?
 - expand to other chips (maybe don't support CPU-utilization for Xtensa, but we could)
+- better to use real passed time instead of hard-coding 500_000us
